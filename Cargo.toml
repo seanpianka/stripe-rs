@@ -40,6 +40,7 @@ full = [
     "orders",
     "sigma",
     "webhook-endpoints",
+    "tracing",
 ]
 
 # Stripe feature groups
@@ -61,6 +62,9 @@ events = []
 # Enable the blocking client
 blocking = ["tokio/rt"]
 
+# Enable tracing integration
+trace = ["tracing", "tracing-futures", "tracing-serde"]
+
 default-tls = ["hyper-tls"]
 rustls-tls = ["hyper-rustls"]
 
@@ -77,6 +81,11 @@ serde_json = "1.0"
 serde_qs = "0.5"
 smol_str = "0.1"
 tokio = "1"
+
+# Tracing integration
+tracing = { version = "0.1", optional = true }
+tracing-futures = { version = "0.2", optional = true }
+tracing-serde = { version = "0.1", optional = true }
 
 # Webhook support
 hmac = { version = "0.7", optional = true }

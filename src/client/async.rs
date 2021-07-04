@@ -6,16 +6,18 @@ use http::header::{HeaderMap, HeaderName, HeaderValue};
 use http::request::Builder as RequestBuilder;
 use hyper::client::connect::dns::GaiResolver;
 use hyper::client::HttpConnector;
+#[cfg(feature = "rustls-tls")]
+use hyper_rustls::HttpsConnector;
+#[cfg(feature = "default-tls")]
+use hyper_tls::HttpsConnector;
 use serde::de::DeserializeOwned;
+#[cfg(feature = "trace")]
+use tracing::{error, debug};
 
 use crate::error::{Error, ErrorResponse, RequestError};
 use crate::params::{AppInfo, Headers};
 use crate::resources::ApiVersion;
 
-#[cfg(feature = "rustls-tls")]
-use hyper_rustls::HttpsConnector;
-#[cfg(feature = "default-tls")]
-use hyper_tls::HttpsConnector;
 #[cfg(all(feature = "default-tls", feature = "rustls-tls"))]
 compile_error!("You must enable only one TLS implementation");
 #[cfg(not(any(feature = "default-tls", feature = "rustls-tls")))]
@@ -237,15 +239,22 @@ impl Client {
     }
 }
 
+#[tracing::instrument(skip(client))]
 fn send<T: DeserializeOwned + Send + 'static>(
     client: &HttpClient,
     request: hyper::Request<hyper::Body>,
 ) -> Response<T> {
     let client = client.clone(); // N.B. Client is send sync;  cloned clients share the same pool.
+    #[cfg(feature = "trace")]
+    debug!(?request, "preparing to send http request");
     Box::pin(async move {
         let response = client.request(request).await?;
+        #[cfg(feature = "trace")]
+        debug!(?response, "received http response");
         let status = response.status();
         let bytes = hyper::body::to_bytes(response.into_body()).await?;
+        #[cfg(feature = "trace")]
+        debug!(response_body = String::from_utf8(bytes.to_vec()).unwrap().as_str());
         if !status.is_success() {
             let mut err = serde_json::from_slice(&bytes).unwrap_or_else(|err| {
                 let mut req = ErrorResponse { error: RequestError::default() };
@@ -253,7 +262,10 @@ fn send<T: DeserializeOwned + Send + 'static>(
                 req
             });
             err.error.http_status = status.as_u16();
-            Err(Error::from(err.error))?;
+            let err = Error::from(err.error);
+            #[cfg(feature = "trace")]
+            error!(?err, "http response status is not successful");
+            Err(err)?;
         }
         serde_json::from_slice(&bytes).map_err(Error::deserialize)
     })
