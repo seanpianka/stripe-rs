@@ -246,6 +246,9 @@ fn send<T: DeserializeOwned + Send + 'static>(
         let response = client.request(request).await?;
         let status = response.status();
         let bytes = hyper::body::to_bytes(response.into_body()).await?;
+        println!();
+        println!("{}", String::from_utf8(bytes.to_vec()).unwrap());
+        println!();
         if !status.is_success() {
             let mut err = serde_json::from_slice(&bytes).unwrap_or_else(|err| {
                 let mut req = ErrorResponse { error: RequestError::default() };
